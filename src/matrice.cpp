@@ -6,16 +6,15 @@
 
 // Pour faire avancer le robot
 const int PULSES_PAR_TOUR = 3200;
-const float VITESSE_AVANCER_MIN = 0.06;
 const float VITESSE_AVANCER_MAX = 0.6;
 const float CIRCONFERENCE_ROUE_M = 0.239389;
 const float TAILLE_CELLULE = 0.49; // En metre
 const float TAUX_ACCELERATION = 1.8;
 
 // Pour faire tourner le robot
-const int PULSES_TOURNER_90_DEG = 1940;
-const float VITESSE_TOURNER_MIN = 0.06;
-const float VITESSE_TOURNER_MAX = 0.15;
+const int PULSES_TOURNER_90_DEG = 1990;
+const float VITESSE_TOURNER_MIN = 0.05;
+const float VITESSE_TOURNER_MAX = 0.12;
 
 // Pour les ajustement des vitesses des moteurs
 const int INTERVALLE_PRISE_MESURE = 20; // En ms
@@ -24,10 +23,10 @@ const float CORRECTION_MAX = 1.2;
 
 // Dimensions du parcours
 const int NB_COLS = 3;
-const int NB_LIGNES = 6;
+const int NB_LIGNES = 10;
 
 // Pour le micro
-const int MICRO_VOLUME_START = 500;
+const int MICRO_VOLUME_START = 745;
 
 // Pins du robot
 const int PIN_PROX_DROITE = 33; // Lumiere verte
@@ -61,6 +60,7 @@ int g_diffAvancerG = 0;             // Accumulation des imprecisions de mouvemen
 int g_diffAvancerD = 0;             // La difference est soustraite a la distance a parcourir lors du prochain mouvement
 int g_diffTournerG = 0;
 int g_diffTournerD = 0;
+float VITESSE_AVANCER_MIN = 0.06;
 
 /****************************************/
 /**** FONCTIONS (DECLARATIONS) ****/
@@ -101,7 +101,11 @@ void loop() {
   g_dir = NORD;
   g_matrice[NB_COLS][NB_LIGNES] = {0};
 
-  g_matrice[g_colonne][g_ligne] = 1; // On marque la case de depart comme exploree
+  g_matrice[1][8] = 1;
+  g_matrice[1][6] = 1;
+  g_matrice[1][2] = 1;
+  g_matrice[1][0] = 1;
+  g_matrice[g_colonne][g_ligne] = 1;
 
   while (!sifflet()); // On attend le signal du sifflet
 
@@ -119,6 +123,19 @@ void loop() {
     }
 
   succes();
+
+  avanceDistance(TAILLE_CELLULE);
+
+  if(g_colonne==0){
+    deplacerCellule(EST);
+  }else if(g_colonne==2){
+    deplacerCellule(OUEST);
+  }
+
+  changerDirection(SUD);
+  VITESSE_AVANCER_MIN = 0.2f;
+  avanceDistance(TAILLE_CELLULE * 4.5);
+  avanceDistance(TAILLE_CELLULE * 4.5);
 }
 
 
@@ -133,17 +150,17 @@ void avanceDistance(float distance){
 
   float vitesseG = 0; // La vitesse de base des moteurs (sans correction)
   float vitesseD = 0;
-  int encodeurG = 0; // Lit le nombre de pulses des encodeurs
-  int encodeurD = 0;
-  int distG = g_diffAvancerG; // Distance totale en pulses parcourue par la roue
-  int distD = g_diffAvancerD; // La difference de distance totale parcourue leur est assignee pour que ca s'equilibre automatiquement
+  float encodeurG = 0; // Lit le nombre de pulses des encodeurs
+  float encodeurD = 0;
+  float distG = g_diffAvancerG; // Distance totale en pulses parcourue par la roue
+  float distD = g_diffAvancerD; // La difference de distance totale parcourue leur est assignee pour que ca s'equilibre automatiquement
   float correctionG = 1; // Multiplicateur correctif de la vitesse du robot pour que les deux roues roulent a la meme vitesse
   float correctionD = 1;
 
   // Tant que le nombre de pulse necessaire pour faire la distance desire est plus petit que le compteur des encoders
   while(distG < PULSES_A_PARCOURIR || distD < PULSES_A_PARCOURIR)
   {
-    const int X = (distG + distD) / 2; // Distance parcourue jusqu'a present
+    const float X = (distG + distD) / 2; // Distance parcourue jusqu'a present
     const float VITESSE_BASE = (VITESSE_AVANCER_MAX - VITESSE_AVANCER_MIN) * TAUX_ACCELERATION * sin((PI*X)/PULSES_A_PARCOURIR) + VITESSE_AVANCER_MIN;
     vitesseG = vitesseD = min(VITESSE_BASE, VITESSE_AVANCER_MAX);
 
@@ -165,6 +182,11 @@ void avanceDistance(float distance){
     // S'assurer que l'element de correction ne depasse pas les limites
     correctionG = minmax(CORRECTION_MIN, correctionG, CORRECTION_MAX);
     correctionD = minmax(CORRECTION_MIN, correctionD, CORRECTION_MAX);
+
+    Serial.print(distG);
+    Serial.print(", ");
+    Serial.print(distD);
+    Serial.print("\n");
   }
 
   arret();
@@ -181,15 +203,6 @@ void avanceDistance(float distance){
   g_diffAvancerG = distG - PULSES_A_PARCOURIR;
   g_diffAvancerD = distD - PULSES_A_PARCOURIR;
 
-  Serial.print("\nDist G&D (avancer): ");
-  Serial.print(distG);
-  Serial.print(", ");
-  Serial.print(distD);
-  Serial.print("\ndiffAvancer G&D: ");
-  Serial.print(g_diffAvancerG);
-  Serial.print(", ");
-  Serial.print(g_diffAvancerD);
-  Serial.print("\n\n");
 }
 
 // Fait tourner le robot de 90deg a gauche (LEFT) ou droite (RIGHT)
@@ -291,12 +304,9 @@ void changerDirection(int dir) {
 
 // Deplace le robot vers la cellule devant celui-ci
 void deplacerCellule(int dir) {
-  const float DISTANCE_A_PARCOURIR = (dir == NORD || dir == SUD) && (g_ligne != 1 || dir != NORD)
-                                   ? TAILLE_CELLULE * 2
-                                   : TAILLE_CELLULE;
-
+  
   changerDirection(dir);
-  avanceDistance(DISTANCE_A_PARCOURIR);
+  avanceDistance(TAILLE_CELLULE);
   switch (g_dir) {
     case NORD:  g_ligne--;    break;
     case EST:   g_colonne++;  break;
